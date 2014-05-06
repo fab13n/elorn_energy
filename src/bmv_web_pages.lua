@@ -8,12 +8,10 @@
 require 'web.server'
 require 'web.template'
 
-local bmv = require 'victron.bmv'
-
 --- Returns all the lines from a BMV request, as triplets,
 --  sorted by their name's alphabetic order.
 function web_server_get_bmv_lines()
-  local record, msg = bmv.record(3)
+  local record, msg = bmv :record(3)
   if not record then return { { " Error ", msg, "" } } end
   local lines  = { }
   for name, value in pairs(record) do

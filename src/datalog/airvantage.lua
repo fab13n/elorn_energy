@@ -18,10 +18,12 @@ local M = { }
 
 -- TODO should be remotely configurable (stored in airvantage.tree)
 M.PERIOD = 60
-M.POLICY = "hourly"
+M.POLICY = "daily"
 
 --- Airvantage data-staging tables
 M.tables = { }
+--- Data-providing local devices
+M.devices = { }
 
 --- Columns to report from BMV records
 M.bmv_columns_list = { 
@@ -44,7 +46,7 @@ end
 --- Acquires and accumulates one BMV record.
 --  @param with_greetings #boolean if true, sends model and version information
 function M.log(with_greetings)
-  local record, msg = bmv.record()
+  local record, msg = M.devices.bmv :record()
   if not record then
     log('DATALOG-AIRVANTAGE', 'ERROR', "Can't read BMV data: %s", msg)
   else
@@ -64,9 +66,7 @@ end
 function M.start()
   if M.timer then return nil, "Already started" end
   log('DATALOG-AIRVANTAGE', 'INFO', "Start logging every %d seconds", M.PERIOD)
-
   M.log(true)
-
   M.timer = timer.new(-math.abs(M.PERIOD), M.log)
   return 'ok'
 end
@@ -80,8 +80,10 @@ function M.stop()
 end
 
 --- Initializes the agent and logging tables.
-function M.init()
+function M.init(bmv)
+  checks('victron.ve-direct')
   airvantage.init()
+  M.devices.bmv=bmv
   M.asset = airvantage.newasset 'boat'
   M.asset :start()
   M.tables.bmv = M.asset:newtable('batteries', M.bmv_columns_list, 'ram', M.POLICY)
