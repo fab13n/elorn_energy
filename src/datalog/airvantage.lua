@@ -1,11 +1,15 @@
 -- (c) Fabien Fleutot, 2014.
 -- Released under the MIT public license.
 
-local log = require 'log'
-local sched = require 'sched'
-local bmv = require 'victron.bmv'
+--- @module datalog.airvantage.
+--  Accumulates and periodically sends data to an AirVantage server through
+--  the embedded agent.
+
+local log        = require 'log'
+local sched      = require 'sched'
+local bmv        = require 'victron.bmv'
 local airvantage = require 'airvantage'
-local timer = require 'timer'
+local timer      = require 'timer'
 
 --- @module datalog.airvantage
 --  Regularly log data and pushes it to an AirVantage server.
@@ -28,6 +32,7 @@ M.bmv_columns_set  = { }
 for _, x in pairs(M.bmv_columns_list) do  M.bmv_columns_set[x]=true end
 
 --- Removes unwanted columns, adds missing ones.
+--  The record is modified in-place.
 local function clean_bmv_record(record)
   for k in pairs(record) do
     if not M.bmv_columns_set[k] then record[k]=nil end
@@ -37,11 +42,19 @@ local function clean_bmv_record(record)
 end
 
 --- Acquires and accumulates one BMV record.
-function M.log()
+--  @param with_greetings #boolean if true, sends model and version information
+function M.log(with_greetings)
   local record, msg = bmv.record()
   if not record then
     log('DATALOG-AIRVANTAGE', 'ERROR', "Can't read BMV data: %s", msg)
   else
+    if with_greetings then
+      local greetings_record = {
+        model     = record.model,
+        firmware  = record.firmware,
+        timestamp = os.time() }
+      M.asset :pushdata ('batteries', greetings_record, 'now')
+    end
     clean_bmv_record(record)
     M.tables.bmv :pushrow(record)
   end
@@ -51,7 +64,9 @@ end
 function M.start()
   if M.timer then return nil, "Already started" end
   log('DATALOG-AIRVANTAGE', 'INFO', "Start logging every %d seconds", M.PERIOD)
-  M.log()
+
+  M.log(true)
+
   M.timer = timer.new(-math.abs(M.PERIOD), M.log)
   return 'ok'
 end
