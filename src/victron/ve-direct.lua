@@ -38,16 +38,18 @@ local checks = require 'checks'
 local sched  = require 'sched'
 local log    = require 'log'
 local lock   = require 'sched.lock'
+local serial = require 'serial'
 
 local M = { }
 
 M.prototype = {
-  dev_file   = false,      --- no reasonable default
-  timeout  = '1.5s',       --- Duration of the data acquisition
-  tmp_file = os.tmpname(), --- File used to exchange between `cat` and this instance
+  dev_file   = false,       --- no reasonable default
+  timeout  = '1.5',         --- Duration of the data acquisition
+  max_frame_length = 150,   --- longest possible size for a frame
+  tmp_file = os.tmpname(),  --- File used to exchange between `cat` and this instance
   accuracy = { 0, 0 },      --- # of attempts / # of successes
   init_command = "stty -F %dev_file% speed 19200 cs8 -icrnl -ixon -icanon >/dev/null",
-  get_data_command = "timeout %timeout% cat %dev_file% > %tmp_file%",
+  get_data_command = "/usr/bin/timeout %timeout% /bin/cat %dev_file% > %tmp_file%",
   names   = false,
   units   = { },
   factors = { },
@@ -63,24 +65,18 @@ local VED_MT = { __type='victron.ve-direct', __index=VED }
 -- @param #ve_direct self a VE.Direct instance
 -- @return #string the data acquired from UART
 --
+
 function VED :raw_data()
-  checks('victron.ve-direct')
-  lock.lock(self) -- No parallel data acquisition!
-  if not self.initialized then
-    local init_cmd = self.init_command :gsub ('%%(.-)%%', self)
-    log("VICTRON-VED", "DEBUG", "Execute %s", init_cmd)
-    os.execute(init_cmd)
-    self.initialized = true
-  end
-  local cmd = self.get_data_command :gsub ('%%(.-)%%', self)
-  os.execute(cmd) -- result will be 124, return code for timeout
-  log("VICTRON-VED", "DEBUG", "Execute %s", cmd)
-  local f = io.open(self.tmp_file, "r")
-  local raw_data = f :read('*a')
-  f :close()
-  log('VICTRON-VED', 'DEBUG', "Acquired %d bytes in %s", #raw_data, self.timeout)
+  lock.lock(self)
+  local r, msg = self.uart :read ((self.n_frames+1)*self.max_frame_length, self.timeout)
   lock.unlock(self)
-  return raw_data
+  if r then
+    log("VICTRON-VED", "DEBUG", "Acquired %d bytes", #r)
+    return r
+  else
+    log("VICTRON-VED", "ERROR", "Can't readt UART: %s", tostring(msg))
+    return nil, msg
+  end
 end
 
 --- Extracts a pair of consecutive frames from raw data,
@@ -112,8 +108,9 @@ function VED :frames(n)
     end
   end
   self.accuracy[2] = self.accuracy[2] + 1 -- one more success
-  local frame = raw_data :sub (checksums[1], checksums[self.n_frames+1]-1)
-  return frame
+  local frames = raw_data :sub (checksums[1], checksums[self.n_frames+1]-1)
+  log('VICTRON-VED', 'ERROR', "Acquired %d frames totaling %d bytes", self.n_frames, #frames)
+  return frames
 end
 
 --- Gets data, extracts a frame, cuts it into lines, converts them
@@ -167,8 +164,7 @@ function M.checksum(frame, a, b)
 end
 
 function M.new(cfg, dev_file)
-  checks('table', '?string')
-  if type(cfg)=='string' then cfg={dev_file=cfg} end
+  checks('table', 'string')
   local function clone(x)
     if type(x~='table') then return x end
     local t={ }
@@ -182,6 +178,9 @@ function M.new(cfg, dev_file)
   end
   if dev_file then instance.dev_file = dev_file end
   if not instance.dev_file then return nil, 'missing dev_file' end
+  local msg
+  instance.uart, msg = serial.open(dev_file, { baudRate=19200 })
+  if not instance.uart then return nil, msg end
   return setmetatable(instance, VED_MT)
 end
 
