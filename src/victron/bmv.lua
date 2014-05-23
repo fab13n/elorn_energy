@@ -59,7 +59,7 @@ local units = {
 
 --- mane -> unit name correspondance table.
 --  Not used by this module, but helpful for other modules exlpoiting the data.
-M.units = { }; for k, v in pairs(units) do M.units[P.names[k]]=v end
+P.units = { }; for k, v in pairs(units) do P.units[P.names[k]]=v end
 
 --- Conversion factors, for values given in unusual units:
 P.factors = {
@@ -68,7 +68,8 @@ P.factors = {
   I   = 1000, -- mA      -> A
   CE  = 1000, -- mAh     -> Ah
   SOC = 10,   -- per1000 -> percents
-  TTG = 60,   -- minutes -> hours
+  TTG = function(x) return x>=0 and x/60 or "+infty" end,
+              -- minutes -> hours; negative -> +infty
   H1  = 1000, -- mAh     -> Ah
   H2  = 1000, -- mAh     -> Ah
   H3  = 1000, -- mAh     -> Ah
