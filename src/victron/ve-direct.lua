@@ -135,7 +135,10 @@ function VED :record (n_retries)
       log('VICTRON-VED', 'ERROR', "Invalid line: %q", line)
     else
       local num, factor = tonumber(value), self.factors[label]
-      if num and factor then num = num / factor end
+      if num and factor then
+        if type(factor)=='number' then num = num / factor
+        else num = factor(num) end
+      end
       if self.names then
         local name=self.names[label]
         if name then label=name
