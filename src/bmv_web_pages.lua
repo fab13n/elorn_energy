@@ -30,8 +30,10 @@ end
 web.site[''] = web.template 'default' {
     title = [[Data Monitoring: Elorn's batteries]],
     body = [[
+    <% local record = web_server_get_bmv_lines() %>
+    <p>Instant power: <%=record.current * record.voltage%>W</p>
     <table style='border: 2px solid gray;'>
-      <% for _, line in ipairs(web_server_get_bmv_lines()) do
+      <% for _, line in ipairs(record) do
            local name, value, unit = unpack(line) %>
       <tr>
         <th class='data-name' style='background-color: gray; color: white; font-family: sans-serif'><%=name%></th>
