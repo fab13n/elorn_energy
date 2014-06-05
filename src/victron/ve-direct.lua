@@ -68,6 +68,7 @@ local VED_MT = { __type='victron.ve-direct', __index=VED }
 
 function VED :raw_data()
   lock.lock(self)
+  self.uart :flush() -- TODO: make it timeout-based, so that reasonably fresh data might be kept readily available
   local r, msg = self.uart :read ((self.n_frames+1)*self.max_frame_length, self.timeout)
   lock.unlock(self)
   if r then
