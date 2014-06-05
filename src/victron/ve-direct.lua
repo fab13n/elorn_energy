@@ -135,17 +135,25 @@ function VED :record (n_retries)
     elseif not label then
       log('VICTRON-VED', 'ERROR', "Invalid line: %q", line)
     else
-      local num, factor = tonumber(value), self.factors[label]
-      if num and factor then
-        if type(factor)=='number' then num = num / factor
-        else num = factor(num) end
+      -- Try to apply conversions on the value
+      local num_value, factor = tonumber(value), self.factors[label]
+      local tf = type(factor)
+      if tf=='table' then
+        value = num_value or value
+        value = factor[value] or value
+      elseif tf=='function' then
+        value = num_value or value
+        value = factor(value)
+      elseif tf=='number' and num_value then
+        value = num_value / factor
       end
+      -- Try to apply conversion on the label
       if self.names then
         local name=self.names[label]
         if name then label=name
         else log('VICTRON-VED', 'ERROR', "Unknown label: %q", label) end
       end
-      record[label] = num or value
+      record[label] = value
     end
   end
   return record
