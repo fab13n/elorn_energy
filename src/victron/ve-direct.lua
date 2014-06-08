@@ -110,7 +110,7 @@ function VED :frames(n)
   end
   self.accuracy[2] = self.accuracy[2] + 1 -- one more success
   local frames = raw_data :sub (checksums[1], checksums[self.n_frames+1]-1)
-  log('VICTRON-VED', 'ERROR', "Acquired %d frames totaling %d bytes", self.n_frames, #frames)
+  log('VICTRON-VED', 'DEBUG', "Acquired %d frames totaling %d bytes", self.n_frames, #frames)
   return frames
 end
 

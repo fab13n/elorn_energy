@@ -10,6 +10,7 @@ local sched      = require 'sched'
 local bmv        = require 'victron.bmv'
 local airvantage = require 'airvantage'
 local timer      = require 'timer'
+local devicetree = require 'devicetree'
 
 --- @module datalog.airvantage
 --  Regularly log data and pushes it to an AirVantage server.
@@ -17,18 +18,18 @@ local timer      = require 'timer'
 local M = { }
 
 -- TODO should be remotely configurable (stored in airvantage.tree)
-M.PERIOD = 60
-M.POLICY = "daily"
+M.PERIOD = 60 -- in seconds
+M.DEFAULT_POLICY_LATENCY = 3600 -- in seconds
 
 --- Airvantage data-staging tables
 M.tables = { }
 --- Data-providing local devices
-M.devices = { }
+M.assets = assets
 
 --- Columns to report from BMV records
 M.bmv_columns_list = { 
   'voltage', 'current', 'state_of_charge', 'time_to_go', 
-  'power', 'timestamp' }
+  'power', 'timestamp', 'consumed_energy' }
   
 M.bmv_columns_set  = { }
 for _, x in pairs(M.bmv_columns_list) do  M.bmv_columns_set[x]=true end
@@ -46,7 +47,7 @@ end
 --- Acquires and accumulates one BMV record.
 --  @param with_greetings #boolean if true, sends model and version information
 function M.log(with_greetings)
-  local record, msg = M.devices.bmv :record()
+  local record, msg = M.assets.bmv :record()
   if not record then
     log('DATALOG-AIRVANTAGE', 'ERROR', "Can't read BMV data: %s", msg)
   else
@@ -65,7 +66,7 @@ end
 --- Start periodically logging
 function M.start()
   if M.timer then return nil, "Already started" end
-  log('DATALOG-AIRVANTAGE', 'INFO', "Start logging every %d seconds", M.PERIOD)
+  log('DATALOG-AIRVANTAGE', 'INFO', "Start logging electrical data")
   M.log(true)
   M.timer = timer.new(-math.abs(M.PERIOD), M.log)
   return 'ok'
@@ -80,13 +81,21 @@ function M.stop()
 end
 
 --- Initializes the agent and logging tables.
-function M.init(bmv)
-  checks('victron.ve-direct')
+function M.init(assets)
+  checks('table')
   airvantage.init()
-  M.devices.bmv=bmv
+  devicetree.init()
+  local _, policy = devicetree.get('config.data.policy.electricity_uploads')
+  if not policy then
+    devicetree.set('config.data.policy.electricity_uploads.latency', M.DEFAULT_POLICY_LATENCY)
+    log('DATALOG-AIRVANTAGE', 'ERROR', "Missing policy. Fixed, but the application needs to restart")
+    os.exit(-1)
+  end
+  M.assets=assets
   M.asset = airvantage.newasset 'boat'
   M.asset :start()
-  M.tables.bmv = M.asset:newtable('batteries', M.bmv_columns_list, 'ram', M.POLICY)
+  
+  M.tables.bmv = assert(M.asset:newtable('bmv', M.bmv_columns_list, 'ram', 'electricity_uploads'))
 end
 
 return M
