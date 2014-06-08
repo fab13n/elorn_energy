@@ -10,15 +10,16 @@ require 'web.template'
 
 --- Takes a record and turns it into a list of lines,
 --  ordered alphabetically.
-local function get_lines(asset)
+function get_lines(asset)
+  if not asset then return { { "Error", "Asset not found", "" } }, { } end
   local record, msg = asset :record(3)
-  if not record then return { { " Error ", msg, "" } } end
+  if not record then return { { " Error ", msg, "" } }, { } end
   local lines  = { }
   for name, value in pairs(record) do
     if tonumber(value) and value%1~=0 then
       value = string.format('%.2f', value)
     end
-    local line = { name, value, bmv.units[name] or '' }
+    local line = { name, value, asset.units[name] or '' }
     table.insert(lines, line)
   end
   local function comp_lines(a, b) return a[1]<b[1] end
@@ -48,7 +49,7 @@ web.site['bmv'] = web.template 'default' {
 
 --- Displays the current MPPT state
 web.site['mppt'] = web.template 'default' {
-    title = [[Data Monitoring: Elorn's batteries]],
+    title = [[Data Monitoring: Elorn's solar panels]],
     body = [[
     <% local lines, r = get_lines(assets.mppt) %>
     <h2>Instant power: <%=string.format('%+.0f', r.power_panels)%>W</h2>
@@ -157,13 +158,16 @@ web.site['pic'] = [[
 </html>
 ]]
 
-web.site['data.json'] = {
-  function (echo, env)
-    local record = { power_panels = 123 } -- TODO fill with actual values
+web.site['data.json'] = function (echo, env)
+    local asset_name = require 'datalog.airvantage'.asset.id
     local response = { }
-    for k, v in ipairs(record) do
-      table.insert(response, '"'..k..'": "'..v..'"')
+    for name, asset in pairs(assets) do
+        local prefix = asset_name..'.'..name..'.'
+        local record = asset :record(3)
+        for key, value in pairs(record) do
+            local line = '"'..prefix..key..'": "'..value..'"'
+            table.insert(response, line)
+        end
     end
-    echo("{\n  "..table.concat(response, ',\n  ')..'\n}')
-  end
-}
+    echo("{ "..table.concat(response, ',\n  ')..' }\n')
+end
