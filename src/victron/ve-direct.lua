@@ -88,8 +88,9 @@ end
 function VED :frames(n)
   checks('victron.ve-direct')
   local REGEXP = '\13\10Checksum\t.()'
-  local raw_data = self :raw_data()
+  local raw_data, msg = self :raw_data()
   self.accuracy[1] = self.accuracy[1] + 1 -- one more attempt
+  if not raw_data then return nil, msg end
   local checksums = { }
   -- find n+1 consecutive checksum lines in `raw_data`
   local last_position = 1
