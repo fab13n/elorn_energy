@@ -60,6 +60,8 @@ local units = {
 --  Not used by this module, but helpful for other modules exlpoiting the data.
 P.units = { }; for k, v in pairs(units) do P.units[P.names[k]]=v end
 
+P.max_frame_length = 250 -- The default 150 often fails
+
 --- Conversion factors, for values given in unusual units:
 P.factors = {
   V   = 1000, -- mV      -> V
