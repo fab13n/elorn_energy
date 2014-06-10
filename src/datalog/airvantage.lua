@@ -7,7 +7,6 @@
 
 local log        = require 'log'
 local sched      = require 'sched'
-local bmv        = require 'victron.bmv'
 local airvantage = require 'airvantage'
 local timer      = require 'timer'
 local devicetree = require 'devicetree'
@@ -27,26 +26,50 @@ M.tables = { }
 M.assets = assets
 
 --- Columns to report from BMV records
-M.bmv_columns_list = { 
+
+M.column_list = { }
+M.column_list.bmv = { 
   'voltage', 'current', 'state_of_charge', 'time_to_go', 
   'power', 'timestamp', 'consumed_energy' }
-  
-M.bmv_columns_set  = { }
-for _, x in pairs(M.bmv_columns_list) do  M.bmv_columns_set[x]=true end
+
+M.column_list.mppt = {
+  'power_max_today',
+  -- 'yield_yesterday',
+  'power_panels',
+  'yield_total',
+  --'product_id',
+  --'error_code',
+  'converter_state',
+  --'serial_number',
+  -- 'power_max_yesterday',
+  'yield_today',
+  'current_battery',
+  'voltage_battery',
+  'voltage_panels',
+  -- 'firmware',
+  'timestamp'
+}
+
+M.column_set = { }
+
+for name, list in pairs(M.column_list) do
+  local set = { }
+  M.column_set[name]=set
+  for _, x in pairs(list) do  set[x]=true end
+end
 
 --- Removes unwanted columns, adds missing ones.
 --  The record is modified in-place.
-local function clean_bmv_record(record)
+local function clean_record(record, set)
   for k in pairs(record) do
-    if not M.bmv_columns_set[k] then record[k]=nil end
+    if not set[k] then record[k]=nil end
   end
-  record.power = record.voltage * record.current
   record.timestamp = os.time()
 end
 
 --- Acquires and accumulates one BMV record.
 --  @param with_greetings #boolean if true, sends model and version information
-function M.log(with_greetings)
+function M.log_bmv(with_greetings)
   local record, msg = M.assets.bmv :record()
   if not record then
     log('DATALOG-AIRVANTAGE', 'ERROR', "Can't read BMV data: %s", msg)
@@ -56,11 +79,41 @@ function M.log(with_greetings)
         model     = record.model,
         firmware  = record.firmware,
         timestamp = os.time() }
-      M.asset :pushdata ('batteries', greetings_record, 'now')
+      M.asset :pushdata ('bmv', greetings_record, 'now')
     end
-    clean_bmv_record(record)
+    clean_record(record, M.column_set.bmv)
+    if tonumber(record.voltage) and tonumber(record.current) then
+      record.power = record.voltage * record.current
+    end
     M.tables.bmv :pushrow(record)
   end
+end
+
+--- Acquires and accumulates one BMV record.
+--  @param with_greetings #boolean if true, sends model and version information
+function M.log_mppt(with_greetings)
+  local record, msg = M.assets.mppt :record()
+  if not record then
+    log('DATALOG-AIRVANTAGE', 'ERROR', "Can't read MPPT data: %s", msg)
+  else
+    if with_greetings then
+      local greetings_record = {
+        yield_yesterday = record.yield_yesterday,
+        power_max_yesterday = record.power_max_yesterday,
+        product_id = record.product_id,
+        serial_number = record.serial_number,
+        firmware = record.firmware,
+        timestamp = os.time() }
+      M.asset :pushdata ('mppt', greetings_record, 'now')
+    end
+    clean_record(record, M.column_set.mppt)
+    M.tables.mppt :pushrow(record)
+  end
+end
+
+function M.log(with_greetings)
+  M.log_bmv(with_greetings)
+  M.log_mppt(with_greetings)
 end
 
 --- Start periodically logging
@@ -95,7 +148,8 @@ function M.init(assets)
   M.asset = airvantage.newasset 'boat'
   M.asset :start()
   
-  M.tables.bmv = assert(M.asset:newtable('bmv', M.bmv_columns_list, 'ram', 'electricity_uploads'))
+  M.tables.bmv = assert(M.asset:newtable('bmv', M.column_list.bmv, 'ram', 'electricity_uploads'))
+  M.tables.mppt = assert(M.asset:newtable('mppt', M.column_list.mppt, 'ram', 'electricity_uploads'))
 end
 
 return M
