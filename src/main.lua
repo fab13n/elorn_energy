@@ -12,8 +12,8 @@ local WEB_PORT = 9001
 --- Associates USB product ids with the asset they're attached to.
 local ASSET_USB_ID = {
   ['067b:2303'] = 'bmv',
-  ['0403:6001'] = 'mppt',
-  ['0403:6015'] = 'multiplus'
+  ['0403:6001'] = 'multiplus',
+  ['0403:6015'] = 'mppt'
 }
 
 -- Web server main page
