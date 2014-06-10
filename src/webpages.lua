@@ -158,16 +158,21 @@ web.site['pic'] = [[
 </html>
 ]]
 
-web.site['data.json'] = function (echo, env)
-    local asset_name = require 'datalog.airvantage'.asset.id
-    local response = { }
-    for name, asset in pairs(assets) do
-        local prefix = asset_name..'.'..name..'.'
-        local record = asset :record(3)
-        for key, value in pairs(record) do
-            local line = '"'..prefix..key..'": "'..value..'"'
-            table.insert(response, line)
+web.site['data.json'] = {
+    header=function(env)
+        env.response_headers['Access-Control-Allow-Origin']='*'
+    end,
+    content=function (echo, env)
+        local asset_name = require 'datalog.airvantage'.asset.id
+        local response = { }
+        for name, asset in pairs(assets) do
+            local prefix = asset_name..'.'..name..'.'
+            local record = asset :record(3)
+            for key, value in pairs(record) do
+                local line = '"'..prefix..key..'": "'..value..'"'
+                table.insert(response, line)
+            end
         end
+        echo("{ "..table.concat(response, ',\n  ')..' }\n')
     end
-    echo("{ "..table.concat(response, ',\n  ')..' }\n')
-end
+}
