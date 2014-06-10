@@ -48,8 +48,6 @@ M.prototype = {
   max_frame_length = 150,   --- longest possible size for a frame
   tmp_file = os.tmpname(),  --- File used to exchange between `cat` and this instance
   accuracy = { 0, 0 },      --- # of attempts / # of successes
-  init_command = "stty -F %dev_file% speed 19200 cs8 -icrnl -ixon -icanon >/dev/null",
-  get_data_command = "/usr/bin/timeout %timeout% /bin/cat %dev_file% > %tmp_file%",
   names   = false,
   units   = { },
   factors = { },
@@ -69,13 +67,13 @@ local VED_MT = { __type='victron.ve-direct', __index=VED }
 function VED :raw_data()
   lock.lock(self)
   self.uart :flush() -- TODO: make it timeout-based, so that reasonably fresh data might be kept readily available
-  local r, msg = self.uart :read ((self.n_frames+1)*self.max_frame_length, self.timeout)
+  local r, msg = self.uart :read ((self.n_frames+1)*self.max_frame_length)
   lock.unlock(self)
   if r then
     log("VICTRON-VED", "DEBUG", "Acquired %d bytes", #r)
     return r
   else
-    log("VICTRON-VED", "ERROR", "Can't readt UART: %s", tostring(msg))
+    log("VICTRON-VED", "ERROR", "Can't read UART: %s", tostring(msg))
     return nil, msg
   end
 end
@@ -178,7 +176,7 @@ end
 function M.new(cfg, dev_file)
   checks('table', 'string')
   local function clone(x)
-    if type(x~='table') then return x end
+    if type(x)~='table' then return x end
     local t={ }
     for k, v in pairs(x) do t[k]=clone(v) end
     return t
@@ -193,6 +191,7 @@ function M.new(cfg, dev_file)
   local msg
   instance.uart, msg = serial.open(dev_file, { baudRate=19200 })
   if not instance.uart then return nil, msg end
+  instance.uart:settimeout(instance.timeout)
   return setmetatable(instance, VED_MT)
 end
 
