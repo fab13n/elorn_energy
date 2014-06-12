@@ -1,0 +1,74 @@
+<!DOCTYPE html PUBLIC
+  "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title></title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <!-- jQuery library -->
+    <script
+       type="text/javascript"
+       src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js">
+    </script>
+    <!-- Data acquisition -->
+    <script
+       type="text/javascript"
+       src="poll.js">
+    </script>
+    <style type="text/css">
+      #diagram {
+        position:   relative;
+        background: url('diagram.png');
+        width:      900px;
+        height:     647px;
+        text-align: center;
+        margin: auto;
+      }
+      .display {
+        position:    absolute;
+        font-family: "sans-serif";
+        font-size:   18px;
+        font-weight: bold;
+        color:       #ff0000;
+      }
+      #GPS       { top: 105px; left:  80px; }
+      #PV1       { top:  65px; left: 520px; }
+      #PV2       { top: 152px; left: 340px; }
+      #batteries { top: 217px; left: 190px; font-size: 24px; }
+      #DC        { top: 245px; left: 520px; }
+      #shore     { top: 387px; left: 235px; }
+      #genset    { top: 509px; left: 235px; }
+      #inv-DC    { top: 337px; left: 340px; }
+      #inv-AC    { top: 450px; left: 520px; }
+    </style>
+  </head>
+  <body>
+    <p>
+      <button type="button" id="refresh">Refresh</button>
+      Data acquired from <span id='origin'>?</span> on <span id='timestamp'>?</span>
+    </p>
+    <div id='diagram'>
+      <p class='display' id='GPS'>
+        <span id='latitude'>?</span>&deg;N <br/>
+        <span id='longitude'>?</span>&deg;E
+      </p>
+      <p class='display' id='PV1'>
+        <span id='power_panels'>?</span>W@<span id='voltage_panels'>?</span>V
+      </p>
+      <p class='display' id='PV2'>
+        <span class='solar_power_battery'>?</span>W
+      </p>
+      <p class='display' id='shore'><span id='power_shore'>?</span>W</p>
+      <p class='display' id='genset'><span id='power_genset'>?</span>W</p>
+      <p class='display' id='DC'><span id='power_24v'>?</span>W</p>
+      <p class='display' id='inv-DC'>
+        <span id='out_power_battery'>?</span>W@<span class='voltage_battery'>?</span>V
+      </p>
+      <p class='display' id='inv-AC'><span id='power_ac'>?</span>W</p>
+      <p class='display' id='batteries'>
+        <span id='consumed_energy'>?</span>Ah<br/>
+        (<span id='state_of_charge'>?</span>%)
+      </p>
+    </div>
+  </body>
+</html>
