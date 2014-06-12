@@ -1,3 +1,25 @@
+-- (c) Fabien Fleutot, 2014.
+-- Released under the MIT public license.
+
+--- @module victron.mk2.decode
+--  Reads MK2 data from a serial port, decodes them into human-readable
+--  Lua records and dispatches them to whomever is interested as
+--  `sched.signals`.
+--
+--  @usage
+--
+--     local uart   = serial.open(...)
+--     local mk2_encode = require 'victron.mk2.encode'
+--     local encoder    = mk2_encode.new(uart)
+--     encoder('state', 'on', 5.5) --switch on, don't draw more than 5.5A from mains.
+--     ...
+--     encoder('led') -- request a description of the LED panel
+--     ...
+--     encoder('frame', 'dc') -- request a description of the DC current line.
+--     ...
+--     encoder('version') -- request firmware version
+--     ...
+--
 local M = { }
 
 --- Takes a command as a sequence of bytes and strings, and encapsulates

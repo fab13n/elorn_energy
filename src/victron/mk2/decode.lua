@@ -8,17 +8,13 @@
 --
 --  @usage
 --
---     local UART_NAME, UART_CFG   = "...", { ... }
+--     local uart   = serial.open(...)
 --     local mk2_decode = require 'victron.mk2.decode'
---     local port       = require 'serial'.open(UART_NAME, UART_CFG)
---     local decoder    = mk2_decode.decoder(port)
---     local function read_loop()
---       while true do
---         local frame = decoder :read()
---         print("Incoming MK2 message: %s", sprint(frame))
---       end
---     end
---     sched.run (read_loop)
+--     local decoder    = mk2_decode.new(uart)
+--     sched.sigrun(decoder, '*', function(ev, frame)
+--         print("Incoming MK2 %s message: %s", ev, sprint(frame))
+--     end)
+--     decoder :start()
 
 
 local bit32 = require 'bit32'

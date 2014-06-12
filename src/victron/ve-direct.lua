@@ -4,20 +4,9 @@
 --- @module victron.bmv
 --  Reads and decodes VE.Direct frames.
 --
---  Since Lua might be a bit too slow to read without errors at 19200 bauds
---  without flow control, we delegate data acquisition to a separate process.
+--  This module is intended to be specialized for each actual VE.Direct device,
+--  cf. for instance modules `victron.bmv` and `victron.mppt`.
 --
---  It could have been a C program that finds and writes back two consecutive
---  frames; but it turns out this program almost exists, it's called `cat`
---  (with a timeout, because we won't get any EOF from an UART).
---
---  So, this module runs `cat /dev/ttyXXX` for `M.TIMEOUT` seconds,
---  finds enough `"Checksum"` lines, verifies the consistency of the complete
---  frames it found, and cuts them in user-friendly Lua records.
---  
---  optionally, it converts labels and units into friendlier ones, if the
---  appropriate conversion tables are provided at initialization.
---  
 --  VE-Direct Data format
 --  =====================
 --

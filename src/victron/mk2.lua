@@ -1,3 +1,22 @@
+-- (c) Fabien Fleutot, 2014.
+-- Released under the MIT public license.
+
+--- @module victron.mk2
+--  Sends MK2 commands to a Victron inverter, decodes responses.
+--
+--  This driver allows to read and modify the settings of a Victron inverter
+--  supporting the proprietery MK2 protocol (Mostly Multiplus, Phoenix and
+--  Quattro product lines). The actual encoding and decoding work is done by
+--  two submodules `victron.mk2.encode` and `victron.mk2.decode`.
+--
+--  Currently supported commands are `version` (read firmware version`, led
+--  (read the current state of the panel's indication LEDs), state (change
+--  the device's operating mode, switch charger and inverter functions on/off,
+--  and optionally limiting input current).
+--
+--  Advanced commands, known as "W commands" in Victron's specs, are not
+--  supported yet.
+
 local serial = require 'serial'
 local encode = require 'victron.mk2.encode'
 local decode = require 'victron.mk2.decode'
@@ -7,6 +26,10 @@ local M = { }
 
 local MT = { }
 
+--- Creates a new MK2 driver instance, using the serial device whose file
+--  name is passed as argument.
+--  @param UART name, e.g. `"/dev/ttyUSB0"`
+--  @return a `victron.mk2` instance or `nil`+error message 
 function M.new(dev_name)
   local instance = { }
   local uart = serial.open(dev_name, {baudrate=2400})
