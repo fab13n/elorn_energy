@@ -32,7 +32,7 @@ local serial = require 'serial'
 local M = { }
 
 M.prototype = {
-  dev_file   = false,       --- no reasonable default
+  filename   = false,       --- no reasonable default
   timeout  = '1.5',         --- Duration of the data acquisition
   max_frame_length = 150,   --- longest possible size for a frame
   tmp_file = os.tmpname(),  --- File used to exchange between `cat` and this instance
@@ -57,9 +57,17 @@ function VED :raw_data()
   lock.lock(self)
   self.uart :flush() -- TODO: make it timeout-based, so that reasonably fresh data might be kept readily available
   local r, msg = self.uart :read ((self.n_frames+1)*self.max_frame_length)
+  if r and #r==0 then -- close/reopen the port
+    log('VICTRON-VED', "WARNING", "No data on UART %s, trying to reopen it", self.filename)
+    self.uart :close()
+    sched.wait(1)
+    self.uart, msg = serial.open(self.filename, { baudRate=19200 })
+    if self.usrt then r, msg = self.uart :read ((self.n_frames+1)*self.max_frame_length) end
+  end
   lock.unlock(self)
+  if #r==0 then r, msg = nil, "no data" end
   if r then
-    log("VICTRON-VED", "DEBUG", "Acquired %d bytes", #r)
+    log("VICTRON-VED", "DEBUG", "Acquired %d bytes of raw data", #r)
     return r
   else
     log("VICTRON-VED", "ERROR", "Can't read UART: %s", tostring(msg))
@@ -98,7 +106,7 @@ function VED :frames(n)
   end
   self.accuracy[2] = self.accuracy[2] + 1 -- one more success
   local frames = raw_data :sub (checksums[1], checksums[self.n_frames+1]-1)
-  log('VICTRON-VED', 'DEBUG', "Acquired %d frames totaling %d bytes", self.n_frames, #frames)
+  log('VICTRON-VED', 'DEBUG', "Acquired %d valid frames totaling %d bytes", self.n_frames, #frames)
   return frames
 end
 
@@ -163,7 +171,7 @@ function M.checksum(frame, a, b)
   return sum%256
 end
 
-function M.new(cfg, dev_file)
+function M.new(cfg, filename)
   checks('table', 'string')
   local function clone(x)
     if type(x)~='table' then return x end
@@ -176,10 +184,10 @@ function M.new(cfg, dev_file)
     if instance[k]==nil then return nil, 'invalid field name '..k end
     instance[k]=v
   end
-  if dev_file then instance.dev_file = dev_file end
-  if not instance.dev_file then return nil, 'missing dev_file' end
+  if filename then instance.filename = filename end
+  if not instance.filename then return nil, 'missing device filename' end
   local msg
-  instance.uart, msg = serial.open(dev_file, { baudRate=19200 })
+  instance.uart, msg = serial.open(filename, { baudRate=19200 })
   if not instance.uart then return nil, msg end
   instance.uart:settimeout(instance.timeout)
   return setmetatable(instance, VED_MT)
