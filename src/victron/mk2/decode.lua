@@ -29,7 +29,8 @@ M.command_char2name = {
   V = 'version',
   L = 'led',
   S = 'state',
-  [string.char(0x40)] = 'info',
+  [string.char(0x20)] = 'info',
+  [string.char(0x40)] = 'panel',
   [string.char(0x41)] = 'multiled'
 }
 
@@ -48,10 +49,20 @@ end
 --  @return `"ok"` or `nil`+message
 function D :start()
   if self.loop then return nil, "already running" end
+  log('VICTRON-MK2', 'INFO', "Starting to monitor decoded frames")
   local function loop()
-    local frame, msg = self:read()
-    if frame then sched.signal(self, frame.cmd_name, frame)
-    else sched.signal(self, 'error', msg) end
+    -- TODO: synchronize on a completed frame (we might start in the middle
+    -- of a `Version` frame reception).
+    while true do
+      local frame, msg = self:read()
+      if frame then
+        log('VICTRON-MK2', 'DEBUG', "Found a frame of type %s", tostring(frame.cmd_name))
+      else
+        log('VICTRON-MK2', 'ERROR', "Can't read frame: %s", tostring(msg))
+      end
+      if frame then sched.signal(self, frame.cmd_name, frame)
+      else sched.signal(self, 'error', msg); sched.wait(2) end
+    end
   end
   self.loop = sched.run(loop)
   return "ok"
@@ -79,14 +90,20 @@ end
 --  @returns the frame, decoded as a Lua record.
 function D :read()
   checks('victron.mk2.decoder')
-  local rawlength = assert(self.uart :read(1)) :byte()
+  local rawlength, chars, msg
+  rawlength, msg = self.uart :read(1)
+  if not rawlength then return nil, msg end
+  rawlength = rawlength :byte()
   local length    = rawlength % 0x80
   local ledframe  = length~=rawlength
-  local chars     = assert(self.uart :read(length + 1))
+  chars, msg      = self.uart :read(length + 1)
+  if not chars then return nil, msg end
   local bytes     = { chars :byte(1, -1) }
+
+  if not verifychecksum(rawlength, bytes) then return nil, "Invalid checksum" end
   local frame     = { }
-  if not verifychecksum(rawlength, bytes) then error "Invalid checksum" end
-  M :decode(bytes, frame)
+  self :decode(bytes, frame)
+
   -- TODO: just ignore and leave it for next read?
   if ledframe then frame.leds = self :read() end
   return frame
@@ -101,15 +118,19 @@ function D :decode (bytes, frame)
   local is_mk2 = bytes[1]==0xFF   -- MK2 frames start with FF, VE.Bus ones don't
   frame.cmd_byte = bytes[is_mk2 and 2 or 1]
   frame.cmd_char = string.char(frame.cmd_byte)
-  frame.cmd_name = M.byte2cmdname[frame.command_char2name]
+  frame.cmd_name = M.command_char2name[frame.cmd_char]
   if is_mk2 and #bytes==3 or not is_mk2 and #bytes==2 then
     -- Empty messages still have a command bytes and a checksum
     frame.empty = true
   elseif not frame.cmd_name then
-    log('VICTRON-MK2', 'WARNING', "Unknown non-empty incoming message "..frame.cmd_char)
+    local all_bytes = { }
+    for i, b in ipairs(bytes) do all_bytes[i]=string.format('%02x', b) end
+    all_bytes = table.concat(all_bytes, '-')
+    log('VICTRON-MK2', 'WARNING', "Unknown non-empty incoming message: "..all_bytes)
+    return nil, "Unknown message"
   else
     local handler = M.decoders[frame.cmd_name]
-    local data = { select(is_mk2 and 3 or 2, unpack(frame)) } -- skip FF&cmd
+    local data = { select(is_mk2 and 3 or 2, unpack(bytes)) } -- skip FF&cmd
     table.remove(data, pos)                               -- remove checksum
     handler(data, frame)
   end
@@ -256,7 +277,7 @@ end
 --  ** `bf_factor` (???)
 --  ** `inverter_factor` (???);
 --  ** `mains_current` in ampers;
---  ** `inverter_current` in ampers;
+--  ** `provided_current` in ampers;
 --  ** `mains_period` in XXX.
 function DECODE.info(bytes, frame)
   local phase_byte = bytes[5]
@@ -266,17 +287,17 @@ function DECODE.info(bytes, frame)
   if frame.phase_name=='L1' then frame.n_phases = phase_byte-7 end
   if frame.phase_name=='DC' then
     -- TODO: check meanings and conversions, command 'W'
-    frame.voltage = get_number(bytes, 6, 2)
-    frame.used_current = get_number(bytes, 8, 3)
-    frame.received_current = get_number(bytes, 11, 3)
-    frame.inverter_period = bytes[14]
+    frame.voltage = get_number(bytes, 6, 2)/100
+    frame.used_current = get_number(bytes, 8, 3)/100
+    frame.provided_current = get_number(bytes, 11, 3)
+    frame.inverter_period = bytes[14]/10
   else -- AC phase
     frame.bf_factor = bytes[1]
     frame.inverter_factor = bytes[2] -- TODO some conversion
     frame.mains_current = get_number(bytes, 8, 2)
-    frame.voltage = get_number(bytes, 10, 2)
-    frame.inverter_current = get_number(bytes, 12, 2)
-    frame.mains_period = bytes[14]
+    frame.voltage = get_number(bytes, 10, 2)/100
+    frame.inverter_current = get_number(bytes, 12, 2)/10
+    frame.mains_period = bytes[14]==255 and 'n/a' or bytes[14]/10
   end
 end
 

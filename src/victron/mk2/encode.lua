@@ -22,19 +22,24 @@
 --
 local M = { }
 
---- Takes a command as a sequence of bytes and strings, and encapsulates
+--- Takes a command as a list of bytes and strings, and encapsulates
 --  it in an MK2 frame
 --  (0xff marker, length, optional last 0xff escape and checksum).
---
+--  @param input command and argument bytes, as a list of numbers and/or strings.
+--  @return completed frame, as a list of integers between 0..255.
+--  
 -- @usage
 -- t = mk2command('V',0x8e,0x3e,0x11,0x00,'B')
 -- for _,x in ipairs(t) do io.write(string.format('%02x ',x)) end
 -- 07 ff 56 8e 3e 11 00 42 85
 -- 
-function M.make_command(...)
+function M.make_frame(input)
+  checks('table')
   local bytes = { 0xff }
-  for _, x in ipairs{...} do
-    if type(x)=='number' then table.insert(bytes, x)
+  for _, x in ipairs(input) do
+    if type(x)=='number' then
+      if x<0 or x>=0x100 or x~=math.floor(x) then error 'invalid byte' end
+      table.insert(bytes, x)
     elseif type(x)=='string' then
       for _, k in ipairs { x:byte(s,1,-1) } do
         table.insert(bytes, k)
@@ -56,14 +61,21 @@ function M.make_command(...)
 end
 
 local ENCODE = { }
+M.encoders=ENCODE
 
-local function send(uart, cmd_name, ...)
+function M.encode(cmd_name, ...)
   local encoder = ENCODE[cmd_name]
-  if not encoder then return nil, 'Unknown command' end
-  local bytes, msg = encoder(...)
+  local bytes, msg
+  if not encoder then
+    bytes, msg = nil, 'Unknown command'
+  elseif type(encoder)=='string' then
+    bytes, msg = { encoder }, nil
+  else
+    bytes, msg = encoder(...)
+  end
   if not bytes then return nil, msg end
-  local str = M.make_command(bytes)
-  return uart :write (str)
+  local msg_bytes = M.make_frame(bytes)
+  return string.char(unpack(msg_bytes))
 end
 
 ENCODE.led = 'L'
@@ -84,11 +96,6 @@ function ENCODE.frame(type)
   local ft = frame_names[type:lower()]
   if not ft then error "invalid frame type name" end
   return { 'F', ft }
-end
-
-function M.new(uart)
-  local instance = { uart=uart }
-  return function(cmd_name, ...) return send(uart, cmd_name, ...) end
 end
 
 return M

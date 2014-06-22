@@ -18,11 +18,13 @@
 --  supported yet.
 
 local serial = require 'serial'
-local encode = require 'victron.mk2.encode'
+local encode = require 'victron.mk2.encode'.encode
 local decode = require 'victron.mk2.decode'
 local sched  = require 'sched'
 
 local M = { }
+
+M.MAX_READ_RETRIES = 3
 
 local MT = { }
 
@@ -30,39 +32,60 @@ local MT = { }
 --  name is passed as argument.
 --  @param UART name, e.g. `"/dev/ttyUSB0"`
 --  @return a `victron.mk2` instance or `nil`+error message 
-function M.new(dev_name)
+function M.new(filename)
   local instance = { }
-  local uart = serial.open(dev_name, {baudrate=2400})
-  instance.encoder = encode.new(uart)
-  instance.decoder = decode.new(uart)
+  local uart = serial.open(filename, {baudrate=2400})
+  uart:settimeout(2)
+  local instance = {
+    decoder=decode.new(uart),
+    uart=uart,
+    filename=filename
+  }
+  --instance.decoder:start()
   return setmetatable(instance, MT)
 end
 
 --- Response(s) expected by each command
 M.responses = {
-  led     = { 'led' },
-  version = { 'version'},
-  state   = { 'info', 'multiled' }
+  led     = { led=1 },
+  version = { version=1},
+  frame   = { info=1, multile=1 },
+  state   = { state=1 }
 }
 
---- Ensures autocompletion on smart interactive shells
-function MT:__pairs() 
-  return pairs{ version=self.version, led=self.led, state=self.state }
+function M.reset_uart(self)
+  if self.uart then self.uart :close(); self.uart=false; end
+  local uart = serial.open(self.filename, {baudrate=2400})
+  uart:settimeout(2)
+  self.uart = uart
 end
 
 --- Encodes and sends the command, waits for appropriate responses,
 --  returns decoded results.
 function MT :__index(name)
-  return function(...)
+  local decoder = self.decoder
+  return function(self, ...)
     local responses = M.responses[name]
-    if not responses then return nil end 
-    local r, msg = self.encoder(name, ...) -- Send the command
+    if not responses then return nil end
+    -- TODO: sending ought to be done here, not in the encoder
+    local r, msg = encode(name, ...) -- Build the command
     if not r then return nil, msg end
-    local events = { 'error', self.timeout, unpack(responses) }
-    local ev, frame = sched.wait(self.decoder, events) -- wait for response
-    if     ev=='error'   then return nil, frame
-    elseif ev=='timeout' then return nil, 'timeout'
-    else   return frame end
+    self.uart:flush()
+    r, msg = self.uart:write(r)
+    if not r then return nil, msg end
+    for i=1, M.MAX_READ_RETRIES do
+      r, msg = decoder :read()
+      if r and responses[r.cmd_name] then break end
+      r, msg = nil, r and "Bad response type "..r.cmd_byte or "No response"
+      sched.wait(0.5)
+    end
+    if not r then M.reset_uart(self) end
+    return r, msg 
+    --local events = { 'error', self.timeout, unpack(responses) }
+    --local ev, frame = sched.wait(self.decoder, events) -- wait for response
+    --if     ev=='error'   then return nil, frame
+    --elseif ev=='timeout' then return nil, 'timeout'
+    --else   return frame end
   end
 end
 
