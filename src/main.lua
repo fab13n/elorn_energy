@@ -49,9 +49,14 @@ local function setup_devices()
       local x, msg = require('victron.'..name).new (filename)
       log('APP', 'INFO', "Start monitoring %s on %s", name, filename)
       if x then assets[name]=x
-      else log('APP', 'ERROR', "Cannot connect with "..name) end
+      else log('APP', 'ERROR', "Cannot connect with %s: %s", name, msg) end
     end
   end
+  if dev.multiplus then
+    local x, msg = require('victron.mk2').new (dev.multiplus)
+    if x then assets.multiplus=x
+    else log('APP', 'ERROR', "Cannot connect with multiplus: %s", name, msg) end
+  else log('APP', 'ERROR', "Multiplus device not found") end
 end
 
 local function main()
